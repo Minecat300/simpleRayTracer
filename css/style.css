@@ -1,0 +1,26 @@
+body {
+    margin: 0;
+    background-color: black;
+    color: white;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+}
+
+canvas {
+    height: 100vh;
+    width: auto;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+h1 {
+    display: block;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1;
+}
