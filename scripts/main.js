@@ -72,7 +72,7 @@ const renderConfig = new Uint32Array([
 const triangleData = [];
 const meshData = [];
 const sphereData = [];
-
+/*
 addTriangle(
     triangleData,
     new xyz(-100, 0, -100),
@@ -91,7 +91,7 @@ addTriangle(
     new xyz(0, 1, 0),
     new xyz(0, 1, 0)
 );
-/*
+
 addMesh(
     meshData,
     0, 2, 
@@ -105,7 +105,7 @@ addMesh(
 /*
 await addModel(
     triangleData, meshData,
-    "/assets/Knight.obj",
+    "./assets/Knight.obj",
     new Material(
         new rgba(255, 255, 255, 1)
     ),
@@ -116,7 +116,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Cube.obj",
+    "./assets/Cube.obj",
     new Material(
         new rgba(255, 0, 0, 1),
         undefined,
@@ -130,7 +130,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Cube.obj",
+    "./assets/Cube.obj",
     new Material(
         new rgba(0, 110, 255, 1),
         undefined,
@@ -144,7 +144,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Cube.obj",
+    "./assets/Cube.obj",
     new Material(
         new rgba(141, 141, 141, 1),
         undefined,
@@ -158,7 +158,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Cube.obj",
+    "./assets/Cube.obj",
     new Material(
         new rgba(0, 164, 14, 1)
     ),
@@ -169,7 +169,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Cube.obj",
+    "./assets/Cube.obj",
     new Material(
         new rgba(255, 255, 255, 1),
         undefined,
@@ -183,7 +183,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Cube.obj",
+    "./assets/Cube.obj",
     new Material(
         new rgba(0, 0, 0, 1),
         new rgb(255, 255, 255),
@@ -196,7 +196,7 @@ await addModel(
 
 await addModel(
     triangleData, meshData,
-    "/assets/Quad.obj",
+    "./assets/Quad.obj",
     new Material(
         new rgba(255, 255, 255, 1),
         undefined,
