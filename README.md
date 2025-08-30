@@ -1,0 +1,3 @@
+WASD, space and shift for movement.
+Arrow Keys for camera rotating.
+X for turning smoothing on and off.
