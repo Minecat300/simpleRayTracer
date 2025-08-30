@@ -13,21 +13,49 @@ struct Camera {
 var<uniform> camera : Camera;
 
 struct Sphere {
-    center           : vec3<f32>,
-    radius           : f32,
-    color            : vec3<f32>,
-    emissionColor    : vec3<f32>,
-    emissionStrength : f32,
-    _padding         : vec3<f32>,
+    center   : vec3<f32>,
+    radius   : f32,
+    material : Material,
+    _padding : vec4<f32>,
 };
 
 @group(0) @binding(3)
 var<storage> spheres : array<Sphere>;
 
+struct Triangle {
+    posA    : vec3<f32>,
+    posB    : vec3<f32>,
+    posC    : vec3<f32>,
+    normalA : vec3<f32>,
+    normalB : vec3<f32>,
+    normalC : vec3<f32>,
+}
+@group(0) @binding(7)
+var<storage> triangles : array<Triangle>;
+
+struct MeshInfo {
+    firstTriangleIndex : f32,
+    numTriangles       : f32,
+    boundsMin          : vec3<f32>,
+    boundsMax          : vec3<f32>,
+    material           : Material,
+}
+
+@group(0) @binding(8)
+var<storage> allMeshInfo : array<MeshInfo>;
+
 struct RenderConfig {
     maxBounceCount : u32,
     numRayPerPixel : u32,
 }
+
+struct FrameInfo {
+    frameCount  : u32,
+    smearFrames : u32,
+}
+
+@group(0) @binding(6) 
+var<uniform> frameInfo : FrameInfo;
 
 @group(0) @binding(4)
 var<uniform> renderConfig : RenderConfig;
@@ -45,17 +73,11 @@ struct SkySettings {
 @group(0) @binding(5)
 var<uniform> sky : SkySettings;
 
-@group(0) @binding(6) 
-var<uniform> frameCount : u32;
-
 struct Material {
     color            : vec3<f32>,
     emissionColor    : vec3<f32>,
     emissionStrength : f32,
-}
-
-struct RayTracingMaterial {
-    color : vec3<f32>,
+    smoothness       : f32,
 }
 
 struct HitInfo {
@@ -98,8 +120,23 @@ fn GetEnvironmentLight(ray: Ray) -> vec3<f32> {
     // Sun mask: only show sun when looking above horizon (ray.dir.y > 0)
     let sunMask = select(0.0, 1.0, ray.dir.y > 0.0);
 
-    return mix(sky.GroundColor, skyGradient, groundToSkyT) + sun * sunMask;
-    //return vec3<f32>(0.0);
+    //return mix(sky.GroundColor, skyGradient, groundToSkyT) + sun * sunMask;
+    return vec3<f32>(0.0);
+}
+
+fn RayBoundingBox(ray: Ray, boundsMin: vec3<f32>, boundsMax: vec3<f32>) -> bool {
+    let invDir = 1.0 / ray.dir;
+
+    var tMin = (boundsMin - ray.origin) * invDir;
+    var tMax = (boundsMax - ray.origin) * invDir;
+
+    let t1 = min(tMin, tMax);
+    let t2 = max(tMin, tMax);
+
+    let tNear = max(max(t1.x, t1.y), t1.z);
+    let tFar  = min(min(t2.x, t2.y), t2.z);
+
+    return tNear <= tFar && tFar >= 0.0;
 }
 
 fn CalculateRayCollision(ray: Ray) -> HitInfo {
@@ -108,7 +145,7 @@ fn CalculateRayCollision(ray: Ray) -> HitInfo {
     closestHit.dst = 1e9;
     closestHit.hitPoint = vec3<f32>(0.0);
     closestHit.normal = vec3<f32>(0.0);
-    closestHit.material = Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0);
+    closestHit.material = Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0);
 
     for (var i = 0u; i < arrayLength(&spheres); i = i + 1u) {
         let sphere = spheres[i];
@@ -116,10 +153,70 @@ fn CalculateRayCollision(ray: Ray) -> HitInfo {
 
         if (hitInfo.didHit && hitInfo.dst < closestHit.dst) {
             closestHit = hitInfo;
-            closestHit.material = Material(sphere.color, sphere.emissionColor, sphere.emissionStrength);
+            closestHit.material = sphere.material;
         }
     }
+    
+    for (var meshIndex = 0u; meshIndex < arrayLength(&allMeshInfo); meshIndex = meshIndex + 1u) {
+        let meshInfo = allMeshInfo[meshIndex];
+
+        if (!RayBoundingBox(ray, meshInfo.boundsMin, meshInfo.boundsMax)) {
+            continue;
+        }
+
+        let triCount = min(u32(meshInfo.numTriangles), arrayLength(&triangles) - u32(meshInfo.firstTriangleIndex));
+        for (var i = 0u; i < triCount; i = i + 1u) {
+            let triIndex = u32(meshInfo.firstTriangleIndex) + i;
+            let tri = triangles[triIndex];
+            let hitInfo = RayTriangle(ray, tri);
+
+            if (hitInfo.didHit && hitInfo.dst < closestHit.dst) {
+                closestHit = hitInfo;
+                closestHit.material = meshInfo.material;
+            }
+        }
+    }
+    
     return closestHit;
+}
+
+fn RayTriangle(ray : Ray, tri : Triangle) -> HitInfo {
+    let edgeAB = tri.posB - tri.posA;
+    let edgeAC = tri.posC - tri.posA;
+    let normalVector = cross(edgeAB, edgeAC);
+    let determinant = -dot(ray.dir, normalVector);
+
+    if (determinant < 1e-6) {
+        return HitInfo(false, 0.0, vec3<f32>(0.0), vec3<f32>(0.0), Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+    }
+
+    let invDet = 1.0 / determinant;
+    let ao = ray.origin - tri.posA;
+    let dao = cross(ao, ray.dir);
+
+    let dst = dot(ao, normalVector) * invDet;
+    let u = dot(edgeAC, dao) * invDet;
+    let v = -dot(edgeAB, dao) * invDet;
+    let w = 1.0 - u - v;
+
+    if (dst < 0.0 || u < 0.0 || v < 0.0 || w < 0.0) {
+        return HitInfo(false, 0.0, vec3<f32>(0.0), vec3<f32>(0.0), Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+    }
+
+    let hitPoint = ray.origin + ray.dir * dst;
+    let normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+
+    return HitInfo(true, dst, hitPoint, normal, Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+
+    /*
+    var hitInfo: HitInfo;
+    hitInfo.didHit = determinant >= 1e-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
+    hitInfo.hitPoint = ray.origin + ray.dir * dst;
+    hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+    hitInfo.dst = dst;
+    hitInfo.material = Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0);
+    return hitInfo;
+    */
 }
 
 fn RaySphere(ray : Ray, sphere : Sphere) -> HitInfo {
@@ -131,7 +228,7 @@ fn RaySphere(ray : Ray, sphere : Sphere) -> HitInfo {
 
     if discriminant < 0.0 {
         return HitInfo(false, -1.0, vec3<f32>(0.0), vec3<f32>(0.0),
-                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0));
+                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
     }
 
     let sqrtD = sqrt(discriminant);
@@ -150,14 +247,14 @@ fn RaySphere(ray : Ray, sphere : Sphere) -> HitInfo {
 
     if dst < 0.0 {
         return HitInfo(false, -1.0, vec3<f32>(0.0), vec3<f32>(0.0),
-                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0));
+                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
     }
 
     let hitPoint = ray.origin + dst * ray.dir;
     let normal = normalize(hitPoint - sphere.center);
 
     // Pass the actual sphere material
-    let material = Material(sphere.color, sphere.emissionColor, sphere.emissionStrength);
+    let material = sphere.material;
 
     return HitInfo(true, dst, hitPoint, normal, material);
 }
@@ -167,12 +264,16 @@ fn trace(r: Ray, rngState: ptr<function, u32>) -> vec3<f32> {
     var incomingLight = vec3<f32>(0.0);
     var rayColor = vec3<f32>(1.0);
     for (var i = 0u; i <= renderConfig.maxBounceCount; i = i + 1u) {
+
         let hitInfo = CalculateRayCollision(ray);
+        let material = hitInfo.material;
+
         if (hitInfo.didHit) {
             ray.origin = hitInfo.hitPoint + 1e-4 * hitInfo.normal;
-            ray.dir = normalize(hitInfo.normal + RandomDirection(rngState));
+            let diffuseDir = normalize(hitInfo.normal + RandomDirection(rngState));
+            let specularDir = reflect(ray.dir, hitInfo.normal);
+            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
 
-            let material = hitInfo.material;
             let emittedLight = material.emissionColor * material.emissionStrength;
             incomingLight += emittedLight * rayColor;
             rayColor *= material.color;
@@ -226,7 +327,7 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
     var ray = Ray(camera.position, dir);
 
     var pixelIndex = gid.y * width + gid.x;
-    var rngState = pixelIndex + frameCount * 1664525u;
+    var rngState = pixelIndex + frameInfo.frameCount * 3235162u;
 
     /*
     trace(&ray, &rngState);
@@ -236,6 +337,9 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
     let color = vec4<f32>(r, g, b, 1.0);
     */
 
+    let dummy1 = triangles[0];
+    let dummy2 = allMeshInfo[0];
+
     var totalIncomingLight = vec3<f32>(0.0);
     for (var rayIndex = 0u; rayIndex < renderConfig.numRayPerPixel; rayIndex = rayIndex + 1u) {
         totalIncomingLight += trace(ray, &rngState);
@@ -243,20 +347,16 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
     }
 
     let coords = vec2<i32>(i32(gid.x), i32(gid.y));
+    let prevSum = textureLoad(oldFrame, coords, 0).rgb;
 
-    // Read previous accumulated color
-    let prevColor = textureLoad(oldFrame, coords, 0);
+    let newSample = totalIncomingLight / f32(renderConfig.numRayPerPixel);
 
-    // Compute current sample
-    let pixelColor = totalIncomingLight / f32(renderConfig.numRayPerPixel);
-    let color = vec4<f32>(pixelColor, 1.0);
-
-    // Compute progressive weight
-    let weight = 1.0 / f32(frameCount + 1);
-
-    // Blend old + new
-    let blended = prevColor * (1.0 - weight) + color * weight;
-
-    // Store blended result
-    textureStore(newFrame, coords, blended);
+    if (frameInfo.smearFrames == 1u) {
+        // accumulate
+        let newSum = prevSum + newSample;
+        textureStore(newFrame, coords, vec4<f32>(newSum, 1.0));
+    } else {
+        // overwrite with just this frame
+        textureStore(newFrame, coords, vec4<f32>(newSample, 1.0));
+    }
 }
