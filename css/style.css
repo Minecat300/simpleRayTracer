@@ -4,17 +4,16 @@ body {
     color: white;
     display: flex;
     align-items: center;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
 }
 
 canvas {
+    min-height: 100vh;
+    max-height: 100vh;
     height: 100vh;
     width: auto;
     display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 0;
 }
 
 h1 {
@@ -23,4 +22,24 @@ h1 {
     top: 20px;
     left: 20px;
     z-index: 1;
+}
+
+.settingsMenu {
+    padding: 20px;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.row {
+    display: flex;
+    flex-direction: row;
+}
+
+span {
+    font-weight: bolder;
+    font-size: larger;
 }

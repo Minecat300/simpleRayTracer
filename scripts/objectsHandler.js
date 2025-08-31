@@ -131,7 +131,6 @@ async function addModel(triArr, meshArr, path, material, translate, rotate, scal
     const transformedTris = transformTriangles(parsedTris, { translate, rotate, scale });
     const triArrayStartIndex = triArr.length/24;
     const triNum = transformedTris.length;
-    console.log(transformedTris);
 
     let boundMin = {x: Infinity, y: Infinity, z: Infinity};
     let boundMax = {x: -Infinity, y: -Infinity, z: -Infinity};

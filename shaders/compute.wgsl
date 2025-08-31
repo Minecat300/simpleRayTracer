@@ -1,6 +1,7 @@
 struct Ray {
     origin : vec3<f32>,
     dir    : vec3<f32>,
+    invDir : vec3<f32>,
 }
 
 struct Camera {
@@ -55,6 +56,8 @@ struct RenderConfig {
 struct FrameInfo {
     frameCount  : u32,
     smearFrames : u32,
+    width       : u32,
+    height      : u32,
 }
 
 @group(0) @binding(6) 
@@ -70,7 +73,7 @@ struct SkySettings {
     SunLightDirection: vec3<f32>,
     SunFocus         : f32,
     SunIntensity     : f32,
-    _padding0        : vec2<f32>, // keep alignment 16-byte safe
+    disable          : f32,
 };
 
 @group(0) @binding(5)
@@ -131,15 +134,16 @@ fn GetEnvironmentLight(ray: Ray) -> vec3<f32> {
     // Sun mask: only show sun when looking above horizon (ray.dir.y > 0)
     let sunMask = select(0.0, 1.0, ray.dir.y > 0.0);
 
-    return mix(sky.GroundColor, skyGradient, groundToSkyT) + sun * sunMask;
-    //return vec3<f32>(0.0);
+    if(!bool(sky.disable)) {
+        return mix(sky.GroundColor, skyGradient, groundToSkyT) + sun * sunMask;
+    } else {
+        return vec3<f32>(0.0);
+    }
 }
 
 fn RayBoundingBox(ray: Ray, boundsMin: vec3<f32>, boundsMax: vec3<f32>) -> bool {
-    let invDir = 1.0 / ray.dir;
-
-    var tMin = (boundsMin - ray.origin) * invDir;
-    var tMax = (boundsMax - ray.origin) * invDir;
+    var tMin = (boundsMin - ray.origin) * ray.invDir;
+    var tMax = (boundsMax - ray.origin) * ray.invDir;
 
     let t1 = min(tMin, tMax);
     let t2 = max(tMin, tMax);
@@ -285,6 +289,7 @@ fn trace(r: Ray, rngState: ptr<function, u32>) -> vec3<f32> {
             let specularDir = reflect(ray.dir, hitInfo.normal);
             let isSpecularBounce = material.specularProbability >= RandomValue(rngState);
             ray.dir = mix(diffuseDir, specularDir, material.smoothness * f32(isSpecularBounce));
+            ray.invDir = 1 / ray.dir;
 
             let emittedLight = material.emissionColor * material.emissionStrength;
             incomingLight += emittedLight * rayColor;
@@ -305,8 +310,8 @@ fn trace(r: Ray, rngState: ptr<function, u32>) -> vec3<f32> {
 
 @compute @workgroup_size(8,8)
 fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let width = 1000u;
-    let height = 600u;
+    let width = frameInfo.width;
+    let height = frameInfo.height;
     if (gid.x >= width || gid.y >= height) { return; }
     let aspect = f32(width) / f32(height);
 
@@ -359,7 +364,7 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
     let jitteredPoint = pointOnPlane + right * jitter.x + up * jitter.y;
 
     let dir = normalize(jitteredPoint - origin);
-    var ray = Ray(origin, dir);
+    var ray = Ray(origin, dir, 1 / dir);
 
         totalIncomingLight += trace(ray, &rngState);
         rngState += 128512u;

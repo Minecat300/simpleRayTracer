@@ -3,12 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>raytracer</title>
+    <title>RayTracer</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="shortcut icon" href="assets/RayTracerIcon.png" type="image/x-icon">
 </head>
 <body>
+    <canvas id="gpuCanvas"></canvas>
     <h1 id="fpsText">0</h1>
-    <canvas id="gpuCanvas" width="1000" height="600"></canvas>
+    <div class="settingsMenu">
+        <div class="column">
+            <label for="previewMaxBounceCountSlider">Preview Max Bounce Count: </label>
+            <span id="previewMaxBounceCountSlider_value"></span>
+            <input type="range" id="previewMaxBounceCountSlider" min="1" max="10">
+        </div>
+        <div class="column">
+            <label for="previewNumRayPerPixelSlider">Preview Num Ray Per Pixel: </label>
+            <span id="previewNumRayPerPixelSlider_value"></span>
+            <input type="range" id="previewNumRayPerPixelSlider" min="1" max="20">
+        </div>
+        <div class="column">
+            <label for="rendersMaxBounceCountSlider">Renders Max Bounce Count: </label>
+            <span id="rendersMaxBounceCountSlider_value"></span>
+            <input type="range" id="rendersMaxBounceCountSlider" min="1" max="10">
+        </div>
+        <div class="column">
+            <label for="rendersNumRayPerPixelSlider">Renders Num Ray Per Pixel: </label>
+            <span id="rendersNumRayPerPixelSlider_value"></span>
+            <input type="range" id="rendersNumRayPerPixelSlider" min="1" max="20">
+        </div>
+        <hr>
+        <div class="column">
+            <label for="divergeStrengthSlider">Diverge Strength: </label>
+            <span id="divergeStrengthSlider_value"></span>
+            <input type="range" id="divergeStrengthSlider" min="0" max="100">
+        </div>
+        <div class="column">
+            <label for="defocusStrengthSlider">Defocus Strength: </label>
+            <span id="defocusStrengthSlider_value"></span>
+            <input type="range" id="defocusStrengthSlider" min="0" max="200">
+        </div>
+        <div class="column">
+            <label for="planeDistSlider">Focus Dist: </label>
+            <span id="planeDistSlider_value"></span>
+            <input type="range" id="planeDistSlider" min="1" max="30" step="0.1">
+        </div>
+        <hr>
+        <div class="column">
+            <label for="camFovSlider">Camera Fov: </label>
+            <span id="camFovSlider_value"></span>
+            <input type="range" id="camFovSlider" min="30" max="120">
+        </div>
+    </div>
     <script type="module" src="scripts/main.js"></script>
 </body>
 </html>
