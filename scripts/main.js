@@ -1,4 +1,6 @@
-import { addModel, addTriangle, addMesh, addSphere } from "./objects.js";
+import { addModel, addTriangle, addMesh, addSphere } from "./objectsHandler.js";
+import { xyz, rgb, rgba, Material } from "./classes.js";
+import { addObjects } from "./objects.js";
 import { createClearPipeline, clearTexture } from "./clear.js";
 
 let clearPipeline;
@@ -21,217 +23,37 @@ context.configure({ device, format, alphaMode: "opaque" });
 const width = canvas.width;
 const height = canvas.height;
 
-class xyz {
-    constructor(x, y, z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-}
-
-class rgb {
-    constructor(r, g, b) {
-        this.r = r/255;
-        this.g = g/255;
-        this.b = b/255;
-    }
-}
-
-class rgba {
-    constructor(r, g, b, a) {
-        this.r = r/255;
-        this.g = g/255;
-        this.b = b/255;
-        this.a = a;
-    }
-}
-
-class Material {
-    constructor(color = new rgb(255, 255, 255), emissionColor = new rgb(0, 0, 0), emissionStrength = 0, smoothness = 0) {
-        this.color = color;
-        this.emissionColor = emissionColor;
-        this.emissionStrength = emissionStrength;
-        this.smoothness = smoothness;
-    }
-}
-
 (async () => {
 
 clearPipeline = await createClearPipeline(device);
 
-const maxBounceCount = 5;
-const numRayPerPixel = 5;
+const maxBounceCount = 3;
+const numRayPerPixel = 6;
+const divergeStrength = 2;
+const defocusStrength = 0;
+
+let camX = 6.0, camY = 3.0, camZ = 0.0;
+let pitch = 0.0, yaw = -Math.PI*0.5;
+let planeDist = 2.0, fov = 90;
 
 const renderConfig = new Uint32Array([
     maxBounceCount,
     numRayPerPixel,
-    0,
-    0
+    divergeStrength,
+    defocusStrength
 ]);
 
 const triangleData = [];
 const meshData = [];
 const sphereData = [];
-/*
-addTriangle(
-    triangleData,
-    new xyz(-100, 0, -100),
-    new xyz(-100, 0, 100),
-    new xyz(100, 0, 100),
-    new xyz(0, 1, 0),
-    new xyz(0, 1, 0),
-    new xyz(0, 1, 0)
-);
-addTriangle(
-    triangleData,
-    new xyz(-100, 0, -100),
-    new xyz(100, 0, 100),
-    new xyz(100, 0, -100),
-    new xyz(0, 1, 0),
-    new xyz(0, 1, 0),
-    new xyz(0, 1, 0)
-);
 
-addMesh(
-    meshData,
-    0, 2, 
-    new xyz(-100, 0, -100), 
-    new xyz(100, 0, 100),
-    new Material(
-        new rgb(0, 127, 255),
-    )
-);
-*/
-/*
-await addModel(
-    triangleData, meshData,
-    "assets/Knight.obj",
-    new Material(
-        new rgba(255, 255, 255, 1)
-    ),
-    new xyz(0, 0, 0),
-    new xyz(0, Math.PI*0.8, 0),
-    new xyz(0.01, 0.01, 0.01)
-);*/
+//dummy objects to allow not having a mesh/sphere.
+addMesh(meshData, 0, 0, new xyz(), new xyz());
+addTriangle(triangleData, new xyz(), new xyz(), new xyz(), new xyz(), new xyz(), new xyz());
+addSphere(sphereData, new xyz());
 
-await addModel(
-    triangleData, meshData,
-    "assets/Cube.obj",
-    new Material(
-        new rgba(255, 0, 0, 1),
-        undefined,
-        undefined,
-        0
-    ),
-    new xyz(0, 2, -2),
-    undefined,
-    new xyz(2, 2, 0.1)
-);
-
-await addModel(
-    triangleData, meshData,
-    "assets/Cube.obj",
-    new Material(
-        new rgba(0, 110, 255, 1),
-        undefined,
-        undefined,
-        0
-    ),
-    new xyz(0, 2, 2),
-    undefined,
-    new xyz(2, 2, 0.1)
-);
-
-await addModel(
-    triangleData, meshData,
-    "assets/Cube.obj",
-    new Material(
-        new rgba(141, 141, 141, 1),
-        undefined,
-        undefined,
-        1
-    ),
-    new xyz(-2, 2, 0),
-    new xyz(0, Math.PI*0.5, 0),
-    new xyz(2, 2, 0.1)
-);
-
-await addModel(
-    triangleData, meshData,
-    "assets/Cube.obj",
-    new Material(
-        new rgba(0, 164, 14, 1)
-    ),
-    new xyz(0, 0, 0),
-    new xyz(Math.PI*0.5, 0, 0),
-    new xyz(2, 2, 0.1)
-);
-
-await addModel(
-    triangleData, meshData,
-    "assets/Cube.obj",
-    new Material(
-        new rgba(255, 255, 255, 1),
-        undefined,
-        undefined,
-        0
-    ),
-    new xyz(0, 4, 0),
-    new xyz(Math.PI*0.5, 0, 0),
-    new xyz(2, 2, 0.1)
-);
-
-await addModel(
-    triangleData, meshData,
-    "assets/Cube.obj",
-    new Material(
-        new rgba(0, 0, 0, 1),
-        new rgb(255, 255, 255),
-        15
-    ),
-    new xyz(0, 3.99, 0),
-    new xyz(Math.PI*0.5, 0, 0),
-    new xyz(0.5, 0.8, 0.1)
-);
-
-await addModel(
-    triangleData, meshData,
-    "assets/Quad.obj",
-    new Material(
-        new rgba(255, 255, 255, 1),
-        undefined,
-        undefined,
-        0.99
-    ),
-    new xyz(2, 2, 0),
-    new xyz(0, Math.PI*0.5, 0),
-    new xyz(2, 2, 2)
-);
-
-const whiteGlowMaterial = new Material(new rgb(0, 0, 0), new rgba(255, 255, 255, 1), 25);
-const diffuseMaterial = new Material(new rgb(255, 255, 255), new rgb(0, 0, 0), 0, 0.5);
-
-addSphere(sphereData, new xyz(0, 1, 0), 1, diffuseMaterial);
-//addSphere(sphereData, new xyz(0, 4, 0), 1, whiteGlowMaterial);
-
-for (let i = 0; i < 0; i++) {
-    addSphere(
-        sphereData,
-        new xyz(
-            Math.random() * 10 - 5,
-            Math.random() * 4 + 1,
-            Math.random() * 10 - 5
-        ),
-        0.5 + Math.random(),
-        new Material(
-            new rgb(
-                Math.random()*255,
-                Math.random()*255,
-                Math.random()*255
-            )
-        )
-    );
-}
+//add actual objects.
+await addObjects(meshData, triangleData, sphereData);
 
 const skyData = new Float32Array([
     // SkyColourHorizon
@@ -361,10 +183,6 @@ const quadBindGroup = device.createBindGroup({
     ],
 });
 
-// --- Write camera + resolution ---
-let camX = 5.0, camY = 2.0, camZ = 0.0;
-let pitch = 0.0, yaw = -Math.PI*0.5;
-
 let lastFrameTime = new Date().getTime();
 const fpsList = [];
 
@@ -380,7 +198,7 @@ const frameInfoArray = new Uint32Array(2);
 
 function frame() {
     // --- Update dynamic data ---
-    cameraData.set([camX, camY, camZ, pitch, yaw, 0.0, 0.0, 0.0]);
+    cameraData.set([camX, camY, camZ, pitch, yaw, planeDist, fov, 0.0]);
     device.queue.writeBuffer(cameraBuffer, 0, cameraData);
     spheresArray.set(sphereData);
     device.queue.writeBuffer(spheresBuffer, 0, spheresArray);
@@ -433,6 +251,10 @@ function frame() {
         clearTexture(device, clearPipeline, oldTexture, canvas.width, canvas.height);
     }
 
+    if (Number.isInteger(frameCount / 100) && frameCount <= 2000 && frameCount != 0) {
+        console.log("Frame num: " + frameCount);
+    }
+
     // --- Update FPS ---
     const now = performance.now();
     const dt = now - lastFrameTime;
@@ -443,16 +265,18 @@ function frame() {
 
     // --- Camera movement ---
     const delta = dt / 144;
-    if (keyPress.w) { camZ += Math.cos(yaw)*moveSpeed*delta; camX += Math.sin(yaw)*moveSpeed*delta; }
-    if (keyPress.s) { camZ -= Math.cos(yaw)*moveSpeed*delta; camX -= Math.sin(yaw)*moveSpeed*delta; }
-    if (keyPress.d) { camZ -= Math.sin(yaw)*moveSpeed*delta; camX += Math.cos(yaw)*moveSpeed*delta; }
-    if (keyPress.a) { camZ += Math.sin(yaw)*moveSpeed*delta; camX -= Math.cos(yaw)*moveSpeed*delta; }
-    if (keyPress.space) camY += moveSpeed*delta;
-    if (keyPress.shift) camY -= moveSpeed*delta;
-    if (keyPress.upArrow) pitch += rotateSpeed*delta;
-    if (keyPress.downArrow) pitch -= rotateSpeed*delta;
-    if (keyPress.rightArrow) yaw += rotateSpeed*delta;
-    if (keyPress.leftArrow) yaw -= rotateSpeed*delta;
+    if (!smearFrames) {
+        if (keyPress.w) { camZ += Math.cos(yaw)*moveSpeed*delta; camX += Math.sin(yaw)*moveSpeed*delta; }
+        if (keyPress.s) { camZ -= Math.cos(yaw)*moveSpeed*delta; camX -= Math.sin(yaw)*moveSpeed*delta; }
+        if (keyPress.d) { camZ -= Math.sin(yaw)*moveSpeed*delta; camX += Math.cos(yaw)*moveSpeed*delta; }
+        if (keyPress.a) { camZ += Math.sin(yaw)*moveSpeed*delta; camX -= Math.cos(yaw)*moveSpeed*delta; }
+        if (keyPress.space) camY += moveSpeed*delta;
+        if (keyPress.shift) camY -= moveSpeed*delta;
+        if (keyPress.upArrow) pitch += rotateSpeed*delta;
+        if (keyPress.downArrow) pitch -= rotateSpeed*delta;
+        if (keyPress.rightArrow) yaw += rotateSpeed*delta;
+        if (keyPress.leftArrow) yaw -= rotateSpeed*delta;
+    }
     pitch = Math.max(-Math.PI/2+0.00001, Math.min(Math.PI/2-0.00001, pitch));
 
     requestAnimationFrame(frame);

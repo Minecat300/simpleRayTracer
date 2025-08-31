@@ -4,9 +4,11 @@ struct Ray {
 }
 
 struct Camera {
-    position : vec3<f32>,
-    pitch    : f32,
-    yaw      : f32,
+    position  : vec3<f32>,
+    pitch     : f32,
+    yaw       : f32,
+    planeDist : f32,
+    fov       : f32,
 }
 
 @group(0) @binding(2)
@@ -16,7 +18,6 @@ struct Sphere {
     center   : vec3<f32>,
     radius   : f32,
     material : Material,
-    _padding : vec4<f32>,
 };
 
 @group(0) @binding(3)
@@ -45,8 +46,10 @@ struct MeshInfo {
 var<storage> allMeshInfo : array<MeshInfo>;
 
 struct RenderConfig {
-    maxBounceCount : u32,
-    numRayPerPixel : u32,
+    maxBounceCount  : u32,
+    numRayPerPixel  : u32,
+    divergeStrength : u32,
+    defocusStrength : u32,
 }
 
 struct FrameInfo {
@@ -74,10 +77,12 @@ struct SkySettings {
 var<uniform> sky : SkySettings;
 
 struct Material {
-    color            : vec3<f32>,
-    emissionColor    : vec3<f32>,
-    emissionStrength : f32,
-    smoothness       : f32,
+    color               : vec3<f32>,
+    emissionColor       : vec3<f32>,
+    emissionStrength    : f32,
+    smoothness          : f32,
+    specularProbability : f32,
+    specularColor       : vec3<f32>,
 }
 
 struct HitInfo {
@@ -107,6 +112,12 @@ fn RandomDirection(state: ptr<function, u32>) -> vec3<f32> {
     return normalize(vec3<f32>(x, y, z)); 
 }
 
+fn RandomPointInCircle(state: ptr<function, u32>) -> vec2<f32> {
+    let angle = RandomValue(state) * 2 * 3.1415;
+    let pointOnCircle = vec2<f32>(cos(angle), sin(angle));
+    return pointOnCircle * sqrt(RandomValue(state));
+}
+
 fn GetEnvironmentLight(ray: Ray) -> vec3<f32> {
     let skyGradientT = pow(smoothstep(0.0, 0.4, ray.dir.y), 0.35);
     let skyGradient = mix(sky.SkyColorHorizon, sky.SkyColorZenith, skyGradientT);
@@ -120,8 +131,8 @@ fn GetEnvironmentLight(ray: Ray) -> vec3<f32> {
     // Sun mask: only show sun when looking above horizon (ray.dir.y > 0)
     let sunMask = select(0.0, 1.0, ray.dir.y > 0.0);
 
-    //return mix(sky.GroundColor, skyGradient, groundToSkyT) + sun * sunMask;
-    return vec3<f32>(0.0);
+    return mix(sky.GroundColor, skyGradient, groundToSkyT) + sun * sunMask;
+    //return vec3<f32>(0.0);
 }
 
 fn RayBoundingBox(ray: Ray, boundsMin: vec3<f32>, boundsMax: vec3<f32>) -> bool {
@@ -145,9 +156,9 @@ fn CalculateRayCollision(ray: Ray) -> HitInfo {
     closestHit.dst = 1e9;
     closestHit.hitPoint = vec3<f32>(0.0);
     closestHit.normal = vec3<f32>(0.0);
-    closestHit.material = Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0);
+    closestHit.material = Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0, 0.0, vec3<f32>(0.0));
 
-    for (var i = 0u; i < arrayLength(&spheres); i = i + 1u) {
+    for (var i = 1u; i < arrayLength(&spheres); i = i + 1u) {
         let sphere = spheres[i];
         let hitInfo = RaySphere(ray, sphere);
 
@@ -157,7 +168,7 @@ fn CalculateRayCollision(ray: Ray) -> HitInfo {
         }
     }
     
-    for (var meshIndex = 0u; meshIndex < arrayLength(&allMeshInfo); meshIndex = meshIndex + 1u) {
+    for (var meshIndex = 1u; meshIndex < arrayLength(&allMeshInfo); meshIndex = meshIndex + 1u) {
         let meshInfo = allMeshInfo[meshIndex];
 
         if (!RayBoundingBox(ray, meshInfo.boundsMin, meshInfo.boundsMax)) {
@@ -187,7 +198,7 @@ fn RayTriangle(ray : Ray, tri : Triangle) -> HitInfo {
     let determinant = -dot(ray.dir, normalVector);
 
     if (determinant < 1e-6) {
-        return HitInfo(false, 0.0, vec3<f32>(0.0), vec3<f32>(0.0), Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+        return HitInfo(false, 0.0, vec3<f32>(0.0), vec3<f32>(0.0), Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0, 0.0, vec3<f32>(0.0)));
     }
 
     let invDet = 1.0 / determinant;
@@ -200,13 +211,13 @@ fn RayTriangle(ray : Ray, tri : Triangle) -> HitInfo {
     let w = 1.0 - u - v;
 
     if (dst < 0.0 || u < 0.0 || v < 0.0 || w < 0.0) {
-        return HitInfo(false, 0.0, vec3<f32>(0.0), vec3<f32>(0.0), Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+        return HitInfo(false, 0.0, vec3<f32>(0.0), vec3<f32>(0.0), Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0, 0.0, vec3<f32>(0.0)));
     }
 
     let hitPoint = ray.origin + ray.dir * dst;
     let normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
 
-    return HitInfo(true, dst, hitPoint, normal, Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+    return HitInfo(true, dst, hitPoint, normal, Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0, 0.0, vec3<f32>(0.0)));
 
     /*
     var hitInfo: HitInfo;
@@ -228,7 +239,7 @@ fn RaySphere(ray : Ray, sphere : Sphere) -> HitInfo {
 
     if discriminant < 0.0 {
         return HitInfo(false, -1.0, vec3<f32>(0.0), vec3<f32>(0.0),
-                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0, 0.0, vec3<f32>(0.0)));
     }
 
     let sqrtD = sqrt(discriminant);
@@ -247,7 +258,7 @@ fn RaySphere(ray : Ray, sphere : Sphere) -> HitInfo {
 
     if dst < 0.0 {
         return HitInfo(false, -1.0, vec3<f32>(0.0), vec3<f32>(0.0),
-                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0));
+                       Material(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, 0.0, 0.0, vec3<f32>(0.0)));
     }
 
     let hitPoint = ray.origin + dst * ray.dir;
@@ -272,11 +283,12 @@ fn trace(r: Ray, rngState: ptr<function, u32>) -> vec3<f32> {
             ray.origin = hitInfo.hitPoint + 1e-4 * hitInfo.normal;
             let diffuseDir = normalize(hitInfo.normal + RandomDirection(rngState));
             let specularDir = reflect(ray.dir, hitInfo.normal);
-            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+            let isSpecularBounce = material.specularProbability >= RandomValue(rngState);
+            ray.dir = mix(diffuseDir, specularDir, material.smoothness * f32(isSpecularBounce));
 
             let emittedLight = material.emissionColor * material.emissionStrength;
             incomingLight += emittedLight * rayColor;
-            rayColor *= material.color;
+            rayColor *= mix(material.color, material.specularColor, f32(isSpecularBounce));
 
         } else {
             let _dummy = sky;
@@ -309,22 +321,20 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
         cosPitch * cosYaw
     ));
 
-    let worldUp = vec3<f32>(0.0,1.0,0.0);
-    let right   = normalize(cross(worldUp, forward));
-    let up      = cross(forward, right);
+    let worldUp = vec3<f32>(0.0, 1.0, 0.0);
+    let right   = normalize(cross(forward, worldUp));
+    let up      = cross(right, forward);
 
-    // UV mapping (flipped Y)
     let uv = vec2<f32>(
-        (f32(gid.x)/f32(width) * 2.0 - 1.0) * aspect,
-        1.0 - (f32(gid.y)/f32(height) * 2.0)
+        -(( (f32(gid.x) + 0.5) / f32(width) ) * 2.0 - 1.0),
+        1.0 - ( (f32(gid.y) + 0.5) / f32(height) ) * 2.0
     );
 
-    let fov = radians(90.0); // 60° vertical FOV
-    let px = uv.x * tan(fov * 0.5);
-    let py = uv.y * tan(fov * 0.5);
-    let dir = normalize(forward + px*right + py*up);
+    let fovY = radians(camera.fov);
+    let halfHeight = tan(fovY * 0.5) * camera.planeDist;
+    let halfWidth = halfHeight * aspect;
 
-    var ray = Ray(camera.position, dir);
+    let pointOnPlane = camera.position + forward * camera.planeDist + right * (uv.x * halfWidth) + up * (uv.y * halfHeight);
 
     var pixelIndex = gid.y * width + gid.x;
     var rngState = pixelIndex + frameInfo.frameCount * 3235162u;
@@ -342,6 +352,15 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
 
     var totalIncomingLight = vec3<f32>(0.0);
     for (var rayIndex = 0u; rayIndex < renderConfig.numRayPerPixel; rayIndex = rayIndex + 1u) {
+    let defocusJitter = RandomPointInCircle(&rngState) * f32(renderConfig.defocusStrength) / f32(width);
+    let origin = camera.position + right * defocusJitter.x + up * defocusJitter.y;
+
+    let jitter = RandomPointInCircle(&rngState) * f32(renderConfig.divergeStrength) / f32(width);
+    let jitteredPoint = pointOnPlane + right * jitter.x + up * jitter.y;
+
+    let dir = normalize(jitteredPoint - origin);
+    var ray = Ray(origin, dir);
+
         totalIncomingLight += trace(ray, &rngState);
         rngState += 128512u;
     }
@@ -351,10 +370,27 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
 
     let newSample = totalIncomingLight / f32(renderConfig.numRayPerPixel);
 
+    let frameCap = 2000u;
+
+    if (frameInfo.frameCount >= frameCap) {
+        textureStore(newFrame, coords, vec4<f32>(prevSum, 1.0));
+        return;
+    }
+
     if (frameInfo.smearFrames == 1u) {
         // accumulate
-        let newSum = prevSum + newSample;
-        textureStore(newFrame, coords, vec4<f32>(newSum, 1.0));
+        let prevColor = textureLoad(oldFrame, coords, 0);
+
+        // Compute current sample
+        let pixelColor = totalIncomingLight / f32(renderConfig.numRayPerPixel);
+        let color = vec4<f32>(pixelColor, 1.0);
+
+        // Compute progressive weight
+        let weight = 1.0 / f32(frameInfo.frameCount + 1);
+
+        // Blend old + new
+        let blended = prevColor * (1.0 - weight) + color * weight;
+        textureStore(newFrame, coords, blended);
     } else {
         // overwrite with just this frame
         textureStore(newFrame, coords, vec4<f32>(newSample, 1.0));

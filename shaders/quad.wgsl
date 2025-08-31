@@ -26,10 +26,8 @@ fn fs(@builtin(position) fragCoord : vec4<f32>) -> @location(0) vec4<f32> {
     let uv = fragCoord.xy / vec2<f32>(1000.0, 600.0);
     let sumColor = textureSample(tex, samp, uv).rgb;
 
+    let _dummy = frameInfo;
     var finalColor = sumColor;
-    if (frameInfo.smearFrames == 1u) {
-        finalColor = sumColor / f32(max(1u, frameInfo.frameCount));
-    }
 
     return vec4<f32>(finalColor, 1.0);
 }
